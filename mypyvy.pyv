@@ -1,8 +1,15 @@
 # PC labels
 sort label
+# processes that write to x and y
 sort process
+# values the elements of x and y arrays can take
 sort value
 
+# Each process executes two atomic steps in sequence,
+# an update to x, then an update to y. This requires
+# three labels, the initial one (x_label), after
+# updating x (y_label), and when the process has
+# finished (done). These labels must be distinct.
 immutable constant x_label: label
 immutable constant y_label: label
 immutable constant done: label
@@ -10,40 +17,54 @@ axiom x_label != y_label
 axiom y_label != done
 axiom done != x_label
 
+# The set of possible values doesn't matter, except
+# that there must exist at least one such value that
+# processes can write to their element in the x array.
 immutable constant one: value
 
+# There are three arrays, x, y, and pc. The pc array
+# tracks the label (control state) of each process.
 mutable function x(process): value
 mutable function y(process): value
 mutable function pc(process): label
 
+# All processes start at the x_label. The initial
+# values of x and y don't matter.
 init forall p. pc(p) = x_label
 
-# x[p] := 1
+# First step:
+#   x[p] := 1
 transition write_x(p: process)
   modifies pc, x
   & old(pc(p) = x_label)
   & x(p) = one & (forall P. P != p -> x(P) = old(x(P)))
   & pc(p) = y_label & (forall P. P != p -> pc(P) = old(pc(P)))
 
-# y[p] := x[q] for some q
+# Second step:
+#   y[p] := x[q] for some q
+#
 # This is a generalization of the algorithm in the
 # Teaching Concurrency paper, which does
-# y[p] := x[(p-1) % N].
-#
-# I really did this because it would be a pain to
-# define the expression ((p-1) % N) in mypyvy.
+# y[p] := x[(p-1) % N]. I generalized the algorithm
+# here, only because it would be a pain to define the
+# expression ((p-1) % N) in mypyvy.
 transition write_y(p: process, q: process)
   modifies pc, y
   & old(pc(p) = y_label)
   & y(p) = old(x(q)) & (forall P. P != p -> y(P) = old(y(P)))
   & pc(p) = done & (forall P. P != p -> pc(P) = old(pc(P)))
 
-invariant [x_inv]
-  forall P. (pc(P) = y_label || pc(P) = done) -> x(P) = one
-
+# The safety property: when all processes finish, there's
+# some process that has set it's y element to one.
 safety [inv]
   (forall P. pc(P) = done) ->
   exists P. y(P) = one
+
+# Conjoining the following to inv forms an inductive invariant.
+# x_inv just records that a x[p] = 1 once a process has moved
+# past x_label.
+invariant [x_inv]
+  forall P. (pc(P) = y_label || pc(P) = done) -> x(P) = one
 
 sat trace { # sanity check
   write_x
