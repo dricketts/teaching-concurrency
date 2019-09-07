@@ -1,0 +1,51 @@
+# PC labels
+sort label
+sort process
+sort value
+
+immutable constant x_label: label
+immutable constant y_label: label
+immutable constant done: label
+axiom x_label != y_label
+axiom y_label != done
+axiom done != x_label
+
+immutable constant one: value
+
+mutable function x(process): value
+mutable function y(process): value
+mutable function pc(process): label
+
+init forall p. pc(p) = x_label
+
+# x[p] := 1
+transition write_x(p: process)
+  modifies pc, x
+  & old(pc(p) = x_label)
+  & x(p) = one & (forall P. P != p -> x(P) = old(x(P)))
+  & pc(p) = y_label & (forall P. P != p -> pc(P) = old(pc(P)))
+
+# y[p] := x[q] for some q
+# This is a generalization of the algorithm in the
+# Teaching Concurrency paper, which does
+# y[p] := x[(p-1) % N].
+#
+# I really did this because it would be a pain to
+# define the expression ((p-1) % N) in mypyvy.
+transition write_y(p: process, q: process)
+  modifies pc, y
+  & old(pc(p) = y_label)
+  & y(p) = old(x(q)) & (forall P. P != p -> y(P) = old(y(P)))
+  & pc(p) = done & (forall P. P != p -> pc(P) = old(pc(P)))
+
+invariant [x_inv]
+  forall P. (pc(P) = y_label || pc(P) = done) -> x(P) = one
+
+safety [inv]
+  (forall P. pc(P) = done) ->
+  exists P. y(P) = one
+
+sat trace { # sanity check
+  write_x
+  write_y
+}
