@@ -7,7 +7,7 @@ x[i] := 1;
 y[i] := x[(i-1) mod N];
 ```
 
-The reads and writes of each x[j] are assumed to be atomic. This algorithm has the property that once all processes have finished, at least one y[j] = 1.
+The reads and writes of each `x[j]` are assumed to be atomic. This algorithm has the property that once all processes have finished, at least one `y[j] = 1`.
 
 The specification and safety proofs are written in several different languages. My goal is to compare concurrency reasoning in various verification tools. So far, I've written specs and proofs in the following tools:
 
