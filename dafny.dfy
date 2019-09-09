@@ -33,7 +33,7 @@
 // preserves the inductive invariant), guarantees the inductive invariant
 // as a post condition, and guarantees that the yielding process's control
 // state doesn't change. This method, along with the algorithm and inductive
-// invariant, are captures in the class below.
+// invariant, are captured in the class below.
 //
 // A downside of this approach is that there is no way to model
 // the scheduler in described in [*], so the methods Init and Proc
@@ -73,7 +73,6 @@ class TeachingConcurrency {
     // Specification of a process. This requires explicitly updating
     // the control state (pc) of the process.
     method Proc(i: int)
-    requires pc.Length == x.Length == y.Length;
     requires 0 <= i < pc.Length;
     requires IndInv();
     ensures IndInv();
@@ -123,14 +122,13 @@ class TeachingConcurrency {
 
     // The full inductive invariant.
     predicate IndInv()
-    requires pc.Length == x.Length == y.Length;
     reads `pc, pc, `x, x, `y, y;
     {
-        Safety() && x_Inv() && x != y
+        x != y && pc.Length == x.Length == y.Length &&
+        Safety() && x_Inv()
     }
 
     method Yield(i: int)
-    requires pc.Length == x.Length == y.Length;
     requires 0 <= i < pc.Length;
     requires IndInv();
     ensures IndInv();
