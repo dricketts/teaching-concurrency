@@ -9,7 +9,7 @@ y[i] := x[(i-1) mod N];
 
 The reads and writes of each `x[j]` are assumed to be atomic. This algorithm has the property that once all processes have finished, at least one `y[j] = 1`.
 
-The specification and safety proofs are written in several different languages. My goal is to compare concurrency reasoning in various verification tools. So far, I've written specs and proofs in the following tools:
+The specification and safety proofs are written in several different languages. My goal is to understand concurrency reasoning in various verification tools, with a long term goal of applying one of the tools to a realistic system. So far, I've written specs and proofs in the following tools:
 
 * PlusCal/TLA+ (https://github.com/tlaplus/tlaplus)
 * Dafny (https://github.com/dafny-lang/dafny)
