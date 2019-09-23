@@ -1,0 +1,131 @@
+// Models the logic of one process i
+method Proc(x: IArray, y: IArray, done: IArray, i: Int)
+  // Arrays are all the same length and i is in bounds
+  requires 0 <= i && i < len(x) && len(y) == len(x) && len(done) == len(x)
+  // 1/2 access to slot i of x, y, and done
+  requires paccess(i)
+  // 1/2 access to all slots of x, y, and done
+  // also gives the inductive invariant of the algorithm
+  // models acquiring the lock
+  requires control_inv(x, y, done)
+  ensures paccess(i)
+  ensures control_inv(x, y, done)
+{
+  // x[i] := 1
+  slot(x, i).val := 1
+  // releases and then re-acquire the lock
+  // exhales and then inhales 1/2 permissions to every slot
+  // also exhales and inhales the inductive invariant
+  yield(x, y, done)
+
+  // y[i] := x[(i-1) mod N]
+  slot(y, i).val := slot(x, (i-1) % len(x)).val
+  // mark the process as done
+  slot(done, i).val := 1
+}
+
+define paccess(i)
+  (access(x, i, 1/2) &&
+   access(y, i, 1/2) &&
+   access(done, i, 1/2))
+
+define control_inv(x, y, done)
+  (access_all(x, 1/2) &&
+   access_all(y, 1/2) &&
+   access_all(done, 1/2) &&
+   ind_inv(x, y, done))
+
+define yield(x, y, done) {
+  exhale control_inv(x, y, done)
+  inhale control_inv(x, y, done)
+}
+
+define all_done(done)
+  forall j: Int :: 0 <= j && j < len(done) ==> slot(done, j).val == 1
+
+define safety(y, done)
+  all_done(done) ==>
+  exists j: Int :: 0 <= j && j < len(y) && slot(y, j).val == 1
+
+define ind_inv(x, y, done)
+  safety(y, done) &&
+  (forall j: Int :: 0 <= j && j < len(done) && slot(done, j).val == 1 ==> slot(x, j).val == 1)
+
+
+// The start of a main method that forks N processes and
+// then joins them. The goal is to assert that some y[i] == 1
+// after joining all processes.
+method Main()
+{
+  var x: IArray
+  var y: IArray
+  var done: IArray
+  inhale access_all(x, write) && access_all(y, write) && access_all(done, write)
+  inhale len(x) == len(y) && len(x) == len(done)
+  inhale forall j: Int :: 0 <= j && j < len(done) ==> slot(done, j).val != 1
+
+  var i: Int := 0
+  while (i < len(x))
+    invariant len(x) == len(y) && len(x) == len(done)
+    invariant access_range(x, i, len(x), 1/2)
+    invariant access_range(y, i, len(y), 1/2)
+    invariant access_range(done, i, len(done), 1/2)
+    invariant access_all(x, 1/2)
+    invariant access_all(y, 1/2)
+    invariant access_all(done, 1/2)
+    // invariant control_inv(x, y, done)
+  {
+    fork(i)
+    i := i + 1
+  }
+
+  i := 0
+  while (i < len(x))
+    invariant len(x) == len(y) && len(x) == len(done)
+    invariant access_all(x, 1/2)
+    invariant access_all(y, 1/2)
+    invariant access_all(done, 1/2)
+    // invariant control_inv(x, y, done)
+  {
+    // join(i, x, y, done)
+    i := i + 1
+  }
+}
+
+define fork(i) {
+  exhale paccess(i)
+}
+
+define join(i, x, y, done) {
+  yield(x, y, done)
+  inhale paccess(i)
+}
+
+/* Encoding of arrays */
+
+field val: Int
+
+// Acccess to one slot
+define access(a, i, f) acc(slot(a,i).val, f)
+// Access to a range of slots
+define access_range(a, start, end, f)
+  (forall j: Int :: start <= j && j < end ==> acc(slot(a,j).val, f))
+// Access to all slots
+define access_all(a, f) access_range(a, 0, len(a), f)
+
+domain IArray {
+  function slot(a: IArray, i: Int): Ref
+  function len(a: IArray): Int
+  function first(r: Ref): IArray
+  function second(r: Ref): Int
+
+  axiom all_diff {
+    forall a: IArray, i: Int :: { slot(a,i) }
+      first(slot(a,i)) == a && second(slot(a,i)) == i
+  }
+
+  axiom len_nonneg {
+    forall a: IArray :: { len(a) }
+      len(a) >= 0
+  }
+}
