@@ -15,5 +15,6 @@ The specification and safety proofs are written in several different languages. 
 * Dafny (https://github.com/dafny-lang/dafny)
 * CIVL/Boogie (https://github.com/boogie-org/boogie)
 * mypyvy (https://github.com/wilcoxjay/mypyvy)
+* SMT (http://smtlib.cs.uiowa.edu/)
 
 I'd be happy to get feedback on my existing solutions, suggestions on other tools to try, or contributions in other tools.
