@@ -1,16 +1,17 @@
 // Models the logic of one process i
 method Proc(x: IArray, y: IArray, done: IArray, i: Int)
-  // Arrays are all the same length and i is in bounds
-  requires 0 <= i && i < len(x) && len(y) == len(x) && len(done) == len(x)
+  // Arrays are all the same length and i is in bounds, and
   // 1/2 access to slot i of x, y, and done
-  requires paccess(i)
+  requires ppre(i, x, y, done)
+  // done bit is set for i, and
+  // 1/2 access to slot i of x, y, and done
+  ensures ppost(i, x, y, done)
+{
   // acquire the lock:
   //  1/2 access to all slots of x, y, and done
   //  also gives the inductive invariant of the algorithm
-  requires control_inv(x, y, done)
-  ensures paccess(i)
-  ensures control_inv(x, y, done)
-{
+  acquire(x, y, done)
+
   // x[i] := 1
   slot(x, i).val := 1
   // release and then re-acquire the lock:
@@ -22,12 +23,24 @@ method Proc(x: IArray, y: IArray, done: IArray, i: Int)
   slot(y, i).val := slot(x, (i-1) % len(x)).val
   // mark the process as done
   slot(done, i).val := 1
+
+  // release the lock:
+  //  give back the 1/2 permissions and
+  //  exhale the inductive invariant
+  release(x, y, done)
 }
 
-define paccess(i)
+define paccess(i, x, y, done)
   (access(x, i, 1/2) &&
    access(y, i, 1/2) &&
    access(done, i, 1/2))
+
+define ppre(i, x, y, done)
+  (0 <= i && i < len(x) && len(y) == len(x) && len(done) == len(x) &&
+   paccess(i, x, y, done))
+
+define ppost(i, x, y, done)
+  (paccess(i, x, y, done) && is_done(done, i))
 
 define control_inv(x, y, done)
   (access_all(x, 1/2) &&
@@ -35,13 +48,29 @@ define control_inv(x, y, done)
    access_all(done, 1/2) &&
    ind_inv(x, y, done))
 
-define yield(x, y, done) {
-  exhale control_inv(x, y, done)
+define acquire(x, y, done) {
   inhale control_inv(x, y, done)
 }
 
+define release(x, y, done) {
+  exhale control_inv(x, y, done)
+}
+
+define done_monotonic(done)
+  (forall j: Int :: 0 <= j && j < len(done) ==>
+   slot(done, j).val == old(slot(done, j).val) ||
+   slot(done, j).val == 1)
+
+method yield(x: IArray, y: IArray, done: IArray)
+requires len(y) == len(x) && len(done) == len(x)
+requires control_inv(x, y, done)
+ensures control_inv(x, y, done)
+ensures done_monotonic(done)
+
+define is_done(done, i) slot(done, i).val == 1
+
 define all_done(done)
-  forall j: Int :: 0 <= j && j < len(done) ==> slot(done, j).val == 1
+  forall j: Int :: 0 <= j && j < len(done) ==> is_done(done, j)
 
 define safety(y, done)
   all_done(done) ==>
@@ -49,7 +78,7 @@ define safety(y, done)
 
 define ind_inv(x, y, done)
   safety(y, done) &&
-  (forall j: Int :: 0 <= j && j < len(done) && slot(done, j).val == 1 ==> slot(x, j).val == 1)
+  (forall j: Int :: 0 <= j && j < len(done) && is_done(done, j) ==> slot(x, j).val == 1)
 
 
 // The start of a main method that forks N processes and
@@ -62,43 +91,65 @@ method Main()
   var done: IArray
   inhale access_all(x, write) && access_all(y, write) && access_all(done, write)
   inhale len(x) == len(y) && len(x) == len(done)
-  inhale forall j: Int :: 0 <= j && j < len(done) ==> slot(done, j).val != 1
+  inhale forall j: Int :: 0 <= j && j < len(done) ==> !is_done(done, j)
+  inhale len(done) > 0
+  assert !is_done(done, 0)
 
+  acquire(x, y, done)
+
+  fork_all(x, y, done)
+  join_all(x, y, done)
+
+  assert exists j: Int :: 0 <= j && j < len(y) && slot(y, j).val == 1
+
+  release(x, y, done)
+}
+
+method fork_all(x: IArray, y: IArray, done: IArray)
+requires len(x) == len(y) && len(x) == len(done)
+requires access_all(x, 1/2)
+requires access_all(y, 1/2)
+requires access_all(done, 1/2)
+requires control_inv(x, y, done)
+ensures control_inv(x, y, done)
+{
   var i: Int := 0
   while (i < len(x))
-    invariant len(x) == len(y) && len(x) == len(done)
+    invariant 0 <= i
     invariant access_range(x, i, len(x), 1/2)
     invariant access_range(y, i, len(y), 1/2)
     invariant access_range(done, i, len(done), 1/2)
-    invariant access_all(x, 1/2)
-    invariant access_all(y, 1/2)
-    invariant access_all(done, 1/2)
-    // invariant control_inv(x, y, done)
+    invariant control_inv(x, y, done)
   {
-    fork(i)
-    i := i + 1
-  }
-
-  i := 0
-  while (i < len(x))
-    invariant len(x) == len(y) && len(x) == len(done)
-    invariant access_all(x, 1/2)
-    invariant access_all(y, 1/2)
-    invariant access_all(done, 1/2)
-    // invariant control_inv(x, y, done)
-  {
-    // join(i, x, y, done)
+    fork(i, x, y, done)
     i := i + 1
   }
 }
 
-define fork(i) {
-  exhale paccess(i)
+method join_all(x: IArray, y: IArray, done: IArray)
+requires len(x) == len(y) && len(x) == len(done)
+requires control_inv(x, y, done)
+ensures control_inv(x, y, done)
+ensures all_done(done)
+{
+  var i: Int := 0
+  while (i < len(x))
+    invariant control_inv(x, y, done)
+    invariant i <= len(done)
+    invariant forall j: Int :: 0 <= j && j < i ==> is_done(done, j)
+  {
+    join(i, x, y, done)
+    i := i + 1
+  }
+}
+
+define fork(i, x, y, done) {
+  exhale ppre(i, x, y, done)
 }
 
 define join(i, x, y, done) {
   yield(x, y, done)
-  inhale paccess(i)
+  inhale ppost(i, x, y, done)
 }
 
 /* Encoding of arrays */
