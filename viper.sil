@@ -56,16 +56,10 @@ define release(x, y, done) {
   exhale control_inv(x, y, done)
 }
 
-define done_monotonic(done)
-  (forall j: Int :: 0 <= j && j < len(done) ==>
-   slot(done, j).val == old(slot(done, j).val) ||
-   slot(done, j).val == 1)
-
 method yield(x: IArray, y: IArray, done: IArray)
 requires len(y) == len(x) && len(done) == len(x)
 requires control_inv(x, y, done)
 ensures control_inv(x, y, done)
-ensures done_monotonic(done)
 
 define is_done(done, i) slot(done, i).val == 1
 
@@ -137,6 +131,7 @@ ensures all_done(done)
     invariant control_inv(x, y, done)
     invariant i <= len(done)
     invariant forall j: Int :: 0 <= j && j < i ==> is_done(done, j)
+    invariant access_range(done, 0, i, 1/2)
   {
     join(i, x, y, done)
     i := i + 1
